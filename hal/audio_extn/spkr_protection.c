@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 - 2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013 - 2018, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -33,7 +33,7 @@
 
 #include <errno.h>
 #include <math.h>
-#include <cutils/log.h>
+#include <log/log.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include "audio_hw.h"
@@ -46,6 +46,8 @@
 #include <cutils/properties.h>
 #include "audio_extn.h"
 #include <linux/msm_audio_calibration.h>
+#include <unistd.h>
+#include <pthread.h>
 
 #ifdef DYNAMIC_LOG_ENABLED
 #include <log_xml_parser.h>
@@ -205,7 +207,7 @@ int get_tzn(const char *sensor_name)
     char name[MAX_PATH] = {0};
     char cwd[MAX_PATH] = {0};
 
-    if (!sensor_name)
+    if (!sensor_name || (strlen(sensor_name) == 0))
         return found;
 
     if (!getcwd(cwd, sizeof(cwd)))

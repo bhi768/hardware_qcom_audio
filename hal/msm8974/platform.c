@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -30,7 +30,9 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <cutils/str_parms.h>
@@ -522,6 +524,9 @@ static const char * device_table[SND_DEVICE_MAX] = {
     [SND_DEVICE_IN_UNPROCESSED_THREE_MIC] = "three-mic",
     [SND_DEVICE_IN_UNPROCESSED_QUAD_MIC] = "quad-mic",
     [SND_DEVICE_IN_UNPROCESSED_HEADSET_MIC] = "headset-mic",
+    [SND_DEVICE_IN_INCALL_REC_RX] = "incall-rec-rx",
+    [SND_DEVICE_IN_INCALL_REC_TX] = "incall-rec-tx",
+    [SND_DEVICE_IN_INCALL_REC_RX_TX] = "incall-rec-rx-tx",
     [SND_DEVICE_IN_ULTRASOUND_MIC] = "ultrasound-mic",
 };
 
@@ -806,6 +811,9 @@ static struct name_to_index snd_device_name_index[SND_DEVICE_MAX] = {
     {TO_NAME_INDEX(SND_DEVICE_IN_UNPROCESSED_THREE_MIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_UNPROCESSED_QUAD_MIC)},
     {TO_NAME_INDEX(SND_DEVICE_IN_UNPROCESSED_HEADSET_MIC)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_INCALL_REC_RX)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_INCALL_REC_TX)},
+    {TO_NAME_INDEX(SND_DEVICE_IN_INCALL_REC_RX_TX)},
 };
 
 static char * backend_tag_table[SND_DEVICE_MAX] = {0};
@@ -1031,7 +1039,11 @@ bool platform_send_gain_dep_cal(void *platform, int level) {
         list_for_each(node, &adev->usecase_list) {
             usecase = node_to_item(node, struct audio_usecase, list);
 
-            if (usecase != NULL && usecase->type == PCM_PLAYBACK) {
+            if (usecase != NULL && usecase->type == PCM_PLAYBACK
+#ifdef ELLIPTIC_ULTRASOUND_ENABLED
+                && usecase->id != USECASE_AUDIO_ULTRASOUND_RX
+#endif
+                ) {
                 int new_snd_device[2] = {0};
                 int i, num_devices = 1;
 
@@ -1476,6 +1488,8 @@ static void set_platform_defaults(struct platform_data * my_data)
     hw_interface_table[SND_DEVICE_IN_UNPROCESSED_THREE_MIC] = strdup("SLIMBUS_0_TX");
     hw_interface_table[SND_DEVICE_IN_UNPROCESSED_QUAD_MIC] = strdup("SLIMBUS_0_TX");
     hw_interface_table[SND_DEVICE_IN_UNPROCESSED_HEADSET_MIC] = strdup("SLIMBUS_0_TX");
+    hw_interface_table[SND_DEVICE_IN_INCALL_REC_RX] = strdup("INCALL_RECORD_RX");
+    hw_interface_table[SND_DEVICE_IN_INCALL_REC_TX] = strdup("INCALL_RECORD_TX");
 
     my_data->max_mic_count = PLATFORM_DEFAULT_MIC_COUNT;
 
@@ -3396,6 +3410,11 @@ int platform_split_snd_device(void *platform,
         new_snd_devices[0] = SND_DEVICE_OUT_SPEAKER;
         new_snd_devices[1] = SND_DEVICE_OUT_BT_A2DP;
         ret = 0;
+    } else if (SND_DEVICE_IN_INCALL_REC_RX_TX == snd_device) {
+        *num_devices = 2;
+        new_snd_devices[0] = SND_DEVICE_IN_INCALL_REC_RX;
+        new_snd_devices[1] = SND_DEVICE_IN_INCALL_REC_TX;
+        ret = 0;
     }
 
     ALOGD("%s: snd_device(%d) num devices(%d) new_snd_devices(%d)", __func__,
@@ -3637,8 +3656,6 @@ snd_device_t platform_get_output_snd_device(void *platform, struct stream_out *o
                     } else
                             snd_device = SND_DEVICE_OUT_VOICE_SPEAKER;
                 }
-        } else if (devices & AUDIO_DEVICE_OUT_ALL_A2DP) {
-            snd_device = SND_DEVICE_OUT_BT_A2DP;
         } else if (devices & AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET ||
                    devices & AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET) {
             snd_device = SND_DEVICE_OUT_USB_HEADSET;

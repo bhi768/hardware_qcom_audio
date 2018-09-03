@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  * Not a Contribution.
  *
  * Copyright (C) 2013 The Android Open Source Project
@@ -844,8 +844,7 @@ int enable_audio_route(struct audio_device *adev,
     audio_extn_listen_update_stream_status(usecase, LISTEN_EVENT_STREAM_BUSY);
     audio_extn_utils_send_app_type_cfg(adev, usecase);
 #ifdef ELLIPTIC_ULTRASOUND_ENABLED
-    if (usecase->id != USECASE_AUDIO_ULTRASOUND_RX &&
-        usecase->id != USECASE_AUDIO_ULTRASOUND_TX)
+    if (usecase->id != USECASE_AUDIO_ULTRASOUND_TX)
 #endif
     audio_extn_utils_send_audio_calibration(adev, usecase);
     if ((usecase->type == PCM_PLAYBACK) && is_offload_usecase(usecase->id)) {
@@ -950,6 +949,10 @@ int enable_snd_device(struct audio_device *adev,
                                         ST_EVENT_SND_DEVICE_BUSY);
         audio_extn_listen_update_device_status(snd_device,
                                         LISTEN_EVENT_SND_DEVICE_BUSY);
+#ifdef ELLIPTIC_ULTRASOUND_ENABLED
+        if (snd_device != SND_DEVICE_OUT_ULTRASOUND_HANDSET &&
+            snd_device != SND_DEVICE_IN_ULTRASOUND_MIC)
+#endif
         if (platform_get_snd_device_acdb_id(snd_device) < 0) {
             adev->snd_dev_ref_cnt[snd_device]--;
             audio_extn_sound_trigger_update_device_status(snd_device,
@@ -1221,6 +1224,12 @@ static void check_usecases_codec_backend(struct audio_device *adev,
               platform_get_snd_device_name(snd_device),
               platform_get_snd_device_name(usecase->out_snd_device),
               platform_check_backends_match(snd_device, usecase->out_snd_device));
+
+#ifdef ELLIPTIC_ULTRASOUND_ENABLED
+        if (usecase->id == USECASE_AUDIO_ULTRASOUND_RX)
+            continue;
+#endif
+
         if ((usecase->type != PCM_CAPTURE) && (usecase != uc_info)) {
             uc_derive_snd_device = derive_playback_snd_device(adev->platform,
                                                usecase, uc_info, snd_device);
@@ -1329,6 +1338,12 @@ static void check_usecases_capture_codec_backend(struct audio_device *adev,
         /*
          * TODO: Enhance below condition to handle BT sco/USB multi recording
          */
+
+#ifdef ELLIPTIC_ULTRASOUND_ENABLED
+        if (usecase->id == USECASE_AUDIO_ULTRASOUND_TX)
+            continue;
+#endif
+
         if (usecase->type != PCM_PLAYBACK &&
                 usecase != uc_info &&
                 (usecase->in_snd_device != snd_device || force_routing) &&
@@ -4240,43 +4255,27 @@ static int out_get_presentation_position(const struct audio_stream_out *stream,
         clock_gettime(CLOCK_MONOTONIC, timestamp);
     } else {
         if (out->pcm) {
-            int64_t signed_frames = -1;
-            // XXX it might be better to identify these
-            // as realtime usecases?
-            if (out->usecase == USECASE_AUDIO_PLAYBACK_MMAP ||
-                out->usecase == USECASE_AUDIO_PLAYBACK_ULL) {
-                unsigned int hw_ptr;
-                if (pcm_mmap_get_hw_ptr(out->pcm, &hw_ptr, timestamp) == 0) {
-                    signed_frames = hw_ptr;
-                }
-                ALOGV("%s frames %lld", __func__, (long long)signed_frames);
-            } else {
-                unsigned int avail;
-                if (pcm_get_htimestamp(out->pcm, &avail, timestamp) == 0) {
-                    size_t kernel_buffer_size =
-                            out->config.period_size * out->config.period_count;
-                     signed_frames =
-                            out->written - kernel_buffer_size + avail;
-                }
-            }
-
-            // This adjustment accounts for buffering after app processor.
-            // It is based on estimated DSP latency per use case, rather than exact.
-            signed_frames -=
-                    (platform_render_latency(out->usecase) *
-                     out->sample_rate / 1000000LL);
-
-            // Adjustment accounts for A2dp encoder latency with non offload usecases
-            // Note: Encoder latency is returned in ms, while platform_render_latency in us.
-            if (AUDIO_DEVICE_OUT_ALL_A2DP & out->devices) {
+            unsigned int avail;
+            if (pcm_get_htimestamp(out->pcm, &avail, timestamp) == 0) {
+                size_t kernel_buffer_size = out->config.period_size * out->config.period_count;
+                int64_t signed_frames = out->written - kernel_buffer_size + avail;
+                // This adjustment accounts for buffering after app processor.
+                // It is based on estimated DSP latency per use case, rather than exact.
                 signed_frames -=
-                        (audio_extn_a2dp_get_encoder_latency() * out->sample_rate / 1000);
-            }
+                        (platform_render_latency(out->usecase) * out->sample_rate / 1000000LL);
 
-            // It would be unusual for this value to be negative, but check just in case ...
-            if (signed_frames >= 0) {
-                *frames = signed_frames;
-                ret = 0;
+                // Adjustment accounts for A2dp encoder latency with non offload usecases
+                // Note: Encoder latency is returned in ms, while platform_render_latency in us.
+                if (AUDIO_DEVICE_OUT_ALL_A2DP & out->devices) {
+                    signed_frames -=
+                            (audio_extn_a2dp_get_encoder_latency() * out->sample_rate / 1000);
+                }
+
+                // It would be unusual for this value to be negative, but check just in case ...
+                if (signed_frames >= 0) {
+                    *frames = signed_frames;
+                    ret = 0;
+                }
             }
         } else if (out->card_status == CARD_STATUS_OFFLINE) {
             *frames = out->written;
@@ -6009,16 +6008,6 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         }
     }
 
-    ret = str_parms_get_int(parms, "ultrasound_set_manual_calibration", &val);
-    if (ret >= 0) {
-        us_set_manual_cal(val);
-    }
-
-    ret = str_parms_get_int(parms, "ultrasound_set_sensitivity", &val);
-    if (ret >= 0) {
-        us_set_sensitivity(val);
-    }
-
     amplifier_set_parameters(parms);
     audio_extn_set_parameters(adev, parms);
 done:
@@ -6416,6 +6405,7 @@ static int adev_open_input_stream(struct audio_hw_device *dev,
     } else if (in->realtime) {
         in->config = pcm_config_audio_capture_rt;
         in->config.format = pcm_format_from_audio_format(config->format);
+        in->config.channels = channel_count;
         in->sample_rate = in->config.rate;
         in->af_period_multiplier = af_period_multiplier;
     } else if (is_usb_dev && may_use_hifi_record) {

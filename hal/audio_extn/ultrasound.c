@@ -19,13 +19,13 @@
 
 #include <errno.h>
 #include <stdlib.h>
-#include <cutils/log.h>
+#include <log/log.h>
 #include "audio_hw.h"
 #include "platform_api.h"
 #include <platform.h>
 #include "ultrasound.h"
 
-#define ULTRASOUND_CALIBRATION_FILE "/persist/audio/us_cal"
+#define ULTRASOUND_CALIBRATION_FILE "/mnt/vendor/persist/audio/us_cal"
 #define ULTRASOUND_CALIBRATION_MIXER "Ultrasound Calibration Data"
 
 enum {

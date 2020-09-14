@@ -2512,6 +2512,7 @@
     <!-- VoIP Tx settings -->
     <path name="audio-record-voip">
         <ctl name="MultiMedia10 Mixer TX_CDC_DMA_TX_3" value="1" />
+        <ctl name="TX_DEC2 Volume" value="84" />
     </path>
 
     <path name="audio-record-voip usb-headset-mic">
@@ -2765,10 +2766,18 @@
     </path>
 
     <path name="hph-highquality-mode">
+        <ctl name="RX_HPH_PWR_MODE" value="LOHIFI" />
+        <ctl name="RX HPH Mode" value="CLS_H_LOHIFI" />
     </path>
 
     <path name="hph-lowpower-mode">
+        <ctl name="RX_HPH_PWR_MODE" value="ULP" />
+        <ctl name="RX HPH Mode" value="CLS_H_ULP" />
     </path>
+
+     <path name="hph-class-ab-mode">
+        <ctl name="RX HPH Mode" value="CLS_AB" />
+     </path>
 
     <path name="true-native-mode">
     </path>
@@ -2969,6 +2978,7 @@
         <ctl name="TX DMIC MUX1" value="DMIC0" />
         <ctl name="TX_AIF1_CAP Mixer DEC2" value="1" />
         <ctl name="TX DMIC MUX2" value="DMIC3" />
+        <ctl name="TX_DEC2 Volume" value="84" />
     </path>
 
     <path name="speaker-dmic-endfire">
@@ -2977,6 +2987,7 @@
         <ctl name="TX DMIC MUX1" value="DMIC0" />
         <ctl name="TX_AIF1_CAP Mixer DEC2" value="1" />
         <ctl name="TX DMIC MUX2" value="DMIC3" />
+        <ctl name="TX_DEC2 Volume" value="84" />
     </path>
 
     <path name="dmic-endfire">
@@ -3066,6 +3077,7 @@
         <ctl name="TX DMIC MUX2" value="DMIC1" />
         <ctl name="TX_AIF1_CAP Mixer DEC3" value="1" />
         <ctl name="TX DMIC MUX3" value="DMIC3" />
+        <ctl name="TX_DEC3 Volume" value="84" />
     </path>
 
     <path name="speaker-tmic">
@@ -3076,6 +3088,7 @@
         <ctl name="TX DMIC MUX2" value="DMIC0" />
         <ctl name="TX_AIF1_CAP Mixer DEC3" value="1" />
         <ctl name="TX DMIC MUX3" value="DMIC3" />
+        <ctl name="TX_DEC3 Volume" value="84" />
     </path>
 
     <path name="voice-speaker-tmic">
@@ -3091,6 +3104,7 @@
         <ctl name="TX DMIC MUX2" value="DMIC1" />
         <ctl name="TX_AIF1_CAP Mixer DEC3" value="1" />
         <ctl name="TX DMIC MUX3" value="DMIC3" />
+        <ctl name="TX_DEC3 Volume" value="84" />
         <ctl name="TX_AIF1_CAP Mixer DEC4" value="1" />
         <ctl name="TX DMIC MUX4" value="DMIC4" />
     </path>
